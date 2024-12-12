@@ -1,6 +1,16 @@
 <?php
 session_start();
 
+// Обробка закінчення часу
+if (isset($_POST['timeout']) && $_SESSION['game_started']) {
+    // Поточний гравець програє, передаємо хід опоненту
+    $current_player = $_SESSION['current_player'];
+    $winning_player = ($current_player === 'X') ? 'O' : 'X';
+    $_SESSION['current_player'] = $winning_player;
+    $has_winner = true;
+    $game_over = true;
+}
+
 // Ініціалізація або відновлення стану гри
 if (!isset($_SESSION['board']) || !isset($_SESSION['game_started'])) {
     $_SESSION['board'] = array_fill(0, 9, '');
@@ -10,6 +20,8 @@ if (!isset($_SESSION['board']) || !isset($_SESSION['game_started'])) {
     $_SESSION['player1_name'] = '';
     $_SESSION['player2_name'] = '';
     $_SESSION['game_started'] = false;
+    $_SESSION['symbol_x'] = '🌟'; // Початковий символ для X
+    $_SESSION['symbol_o'] = '🌙'; // Початковий символ для O
 }
 
 // Обробка форми налаштувань гри
@@ -21,6 +33,8 @@ if (isset($_POST['start'])) {
     $_SESSION['difficulty'] = $_POST['difficulty'] ?? 'easy';
     $_SESSION['player1_name'] = $_POST['player1_name'];
     $_SESSION['player2_name'] = $_POST['game_mode'] === 'friend' ? $_POST['player2_name'] : 'Комп\'ютер';
+    $_SESSION['symbol_x'] = $_POST['symbol_x'];
+    $_SESSION['symbol_o'] = $_POST['symbol_o'];
 }
 
 // Перезапуск гри (зберігає налаштування)
@@ -32,7 +46,6 @@ if (isset($_POST['restart'])) {
 
 // Повернення до меню
 if (isset($_POST['menu'])) {
-    // Скидаємо стан гри повністю
     $_SESSION['game_started'] = false;
     $_SESSION['board'] = array_fill(0, 9, '');
     $_SESSION['current_player'] = 'X';
@@ -131,7 +144,7 @@ function getBestMove() {
     for ($i = 0; $i < 9; $i++) {
         if ($_SESSION['board'][$i] === '') {
             $_SESSION['board'][$i] = 'O';
-            if (checkWin(true)) {  // Використовуємо тестовий режим
+            if (checkWin(true)) {
                 $_SESSION['board'][$i] = '';
                 return $i;
             }
@@ -143,7 +156,7 @@ function getBestMove() {
     for ($i = 0; $i < 9; $i++) {
         if ($_SESSION['board'][$i] === '') {
             $_SESSION['board'][$i] = 'X';
-            if (checkWin(true)) {  // Використовуємо тестовий режим
+            if (checkWin(true)) {
                 $_SESSION['board'][$i] = '';
                 return $i;
             }
@@ -177,167 +190,47 @@ $game_over = $has_winner || $is_draw;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Хрестики-нулики</title>
-    <style>
-        :root {
-            --primary: #A86D83;
-            --secondary: #EFB2D6;
-            --light: #FDECD4;
-            --accent: #FCD38F;
-            --dark: #EA9D00;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: var(--light);
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-        
-        .container {
-            width: 100%;
-            max-width: 800px;
-            text-align: center;
-        }
-        
-        .status {
-            font-size: 24px;
-            margin-bottom: 20px;
-            color: var(--primary);
-            font-weight: bold;
-            min-height: 36px;
-        }
-        
-        .board {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin: 0 auto;
-            max-width: min(80vh, 600px);
-        }
-        
-        .cell {
-            aspect-ratio: 1;
-            border: none;
-            background-color: var(--secondary);
-            font-size: min(15vw, 120px);
-            cursor: pointer;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .cell:not([disabled]):hover {
-            background-color: var(--accent);
-            transform: scale(1.05);
-        }
-        
-        .cell.winning {
-            background-color: var(--dark);
-            color: white;
-            animation: pulse 1s infinite;
-        }
-        
-        .cell.dimmed {
-            opacity: 0.5;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-        
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            background-color: var(--light);
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            max-width: 400px;
-            width: 90%;
-        }
-        
-        .modal h2 {
-            color: var(--primary);
-            margin-bottom: 20px;
-        }
-        
-        input, select {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 2px solid var(--secondary);
-            border-radius: 8px;
-            font-size: 16px;
-        }
-        
-        .button {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 5px;
-            transition: all 0.3s ease;
-        }
-        
-        .button:hover {
-            background-color: var(--dark);
-            transform: translateY(-2px);
-        }
-    </style>
+    <title>Хрестики-нулики </title>
+    <link rel="icon" type="image/png" href="./tic-tac-toe.png">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <div class="status">
             <?php if ($has_winner): ?>
-                <?php echo $_SESSION['current_player'] === 'X' ? $_SESSION['player1_name'] : $_SESSION['player2_name']; ?> переміг!
+                <?php 
+                    $winner_symbol = $_SESSION['current_player'] === 'X' ? $_SESSION['symbol_x'] : $_SESSION['symbol_o'];
+                    echo $_SESSION['current_player'] === 'X' ? $_SESSION['player1_name'] : $_SESSION['player2_name']; 
+                ?> переміг!
             <?php elseif ($is_draw): ?>
                 Нічия!
             <?php elseif ($_SESSION['game_started']): ?>
-                Хід гравця: <?php echo $_SESSION['current_player'] === 'X' ? $_SESSION['player1_name'] : $_SESSION['player2_name']; ?>
+                Хід: <?php 
+                    $current_symbol = $_SESSION['current_player'] === 'X' ? $_SESSION['symbol_x'] : $_SESSION['symbol_o'];
+                    $current_name = $_SESSION['current_player'] === 'X' ? $_SESSION['player1_name'] : $_SESSION['player2_name'];
+                    echo "$current_name ($current_symbol)";
+                ?>
             <?php endif; ?>
         </div>
 
-        <div class="board">
+<div class="board">
             <?php for($i = 0; $i < 9; $i++): ?>
                 <form method="post" style="display: contents;">
-                    <button type="submit" 
-                            name="cell" 
-                            value="<?php echo $i; ?>" 
-                            class="cell <?php echo in_array($i, $winning_combination) ? 'winning' : 
-                                           (!empty($winning_combination) ? 'dimmed' : ''); ?>"
-                            <?php echo !$_SESSION['game_started'] || $game_over || $_SESSION['board'][$i] !== '' ? 'disabled' : ''; ?>>
-                        <?php echo $_SESSION['board'][$i]; ?>
+<button type="submit" 
+        name="cell" 
+        value="<?php echo $i; ?>" 
+        class="cell <?php echo in_array($i, $winning_combination) ? 'winning' : 
+                       (!empty($winning_combination) ? 'dimmed' : ''); ?>"
+        onclick="return submitMove(this);"
+        <?php echo !$_SESSION['game_started'] || $game_over || $_SESSION['board'][$i] !== '' ? 'disabled' : ''; ?>>
+
+                        <?php 
+                            if ($_SESSION['board'][$i] === 'X') {
+                                echo $_SESSION['symbol_x'];
+                            } elseif ($_SESSION['board'][$i] === 'O') {
+                                echo $_SESSION['symbol_o'];
+                            }
+                        ?>
                     </button>
                 </form>
             <?php endfor; ?>
@@ -348,7 +241,7 @@ $game_over = $has_winner || $is_draw;
     <?php if (!$_SESSION['game_started']): ?>
     <div class="modal">
         <div class="modal-content">
-            <h2>Нова гра</h2>
+            <h2>Нова магічна гра ✨</h2>
             <form method="post">
                 <select name="game_mode" id="game-mode" onchange="togglePlayer2Input(this.value)">
                     <option value="computer">Гра з комп'ютером</option>
@@ -366,6 +259,27 @@ $game_over = $has_winner || $is_draw;
                 <input type="text" name="player1_name" placeholder="Ім'я першого гравця" required>
                 <input type="text" name="player2_name" id="player2-input" placeholder="Ім'я другого гравця" style="display: none;">
                 
+                <!-- Додаємо вибір символів -->
+                <select name="symbol_x" class="symbol-select">
+                    <option value="🌟">🌟 Зірка</option>
+                    <option value="🌞">🌞 Сонце</option>
+                    <option value="🦁">🦁 Лев</option>
+                    <option value="🌈">🌈 Веселка</option>
+                    <option value="⭐">⭐ Зірочка</option>
+                    <option value="🎮">🎮 Геймпад</option>
+                    <option value="❌">❌ Хрестик</option>
+                </select>
+
+                <select name="symbol_o" class="symbol-select">
+                    <option value="🌙">🌙 Місяць</option>
+                    <option value="🌚">🌚 Темний місяць</option>
+                    <option value="🐯">🐯 Тигр</option>
+                    <option value="🌺">🌺 Квітка</option>
+                    <option value="💫">💫 Зірки</option>
+                    <option value="🎲">🎲 Кубик</option>
+                    <option value="⭕">⭕ Нулик</option>
+                </select>
+                
                 <button type="submit" name="start" class="button">Почати гру</button>
             </form>
         </div>
@@ -378,9 +292,13 @@ $game_over = $has_winner || $is_draw;
         <div class="modal-content">
             <h2>
                 <?php if ($has_winner): ?>
-                    <?php echo $_SESSION['current_player'] === 'X' ? $_SESSION['player1_name'] : $_SESSION['player2_name']; ?> переміг!
+                    <?php 
+                        $winner_symbol = $_SESSION['current_player'] === 'X' ? $_SESSION['symbol_x'] : $_SESSION['symbol_o'];
+                        echo $_SESSION['current_player'] === 'X' ? $_SESSION['player1_name'] : $_SESSION['player2_name']; 
+                        echo " ($winner_symbol) переміг!";
+                    ?>
                 <?php else: ?>
-                    Нічия!
+                    Нічия! 🤝
                 <?php endif; ?>
             </h2>
             <form method="post" style="display: inline;">
@@ -391,19 +309,47 @@ $game_over = $has_winner || $is_draw;
     </div>
     <?php endif; ?>
 
-    <script>
-        function togglePlayer2Input(mode) {
-            const player2Input = document.getElementById('player2-input');
-            const difficultySection = document.getElementById('difficulty-section');
+<script>
+
+    // Додаємо затримку для ходу комп'ютера
+    async function submitMove(button) {
+        const isComputerGame = <?php echo json_encode($_SESSION['game_mode'] === 'computer'); ?>;
+        const isPlayerX = <?php echo json_encode($_SESSION['current_player'] === 'X'); ?>;
+        
+        // Скидаємо таймер при кожному ході
+        if (timerId) clearInterval(timerId);
+        startTimer();
+        
+        if (isComputerGame && isPlayerX) {
+            // Блокуємо всі клітинки на час ходу комп'ютера
+            const cells = document.querySelectorAll('.cell:not([disabled])');
+            cells.forEach(cell => cell.disabled = true);
             
-            if (mode === 'friend') {
-                player2Input.style.display = 'block';
-                difficultySection.style.display = 'none';
-            } else {
-                player2Input.style.display = 'none';
-                difficultySection.style.display = 'block';
-            }
+            // Відправляємо форму з затримкою для комп'ютера
+            setTimeout(() => {
+                button.form.submit();
+            }, 500);
+            return false;
         }
-    </script>
+        
+        button.form.submit();
+        return false;
+    }
+
+    function togglePlayer2Input(mode) {
+        const player2Input = document.getElementById('player2-input');
+        const difficultySection = document.getElementById('difficulty-section');
+        
+        if (mode === 'friend') {
+            player2Input.style.display = 'block';
+            player2Input.required = true;
+            difficultySection.style.display = 'none';
+        } else {
+            player2Input.style.display = 'none';
+            player2Input.required = false;
+            difficultySection.style.display = 'block';
+        }
+    }
+</script>
 </body>
 </html>
